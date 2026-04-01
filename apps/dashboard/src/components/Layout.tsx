@@ -1,10 +1,14 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "../contexts/ToastContext";
+import { useSession, signOut } from "../lib/auth-client";
+import { queryClient } from "../lib/query-client";
 
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { data: session } = useSession();
+  const user = session?.user;
 
   const getNavClass = (path: string) => {
     return location.pathname === path
@@ -12,10 +16,16 @@ export default function Layout() {
       : "flex items-center gap-3 px-4 py-3 text-slate-400 font-medium hover:bg-[#1f1e2a] hover:text-white transition-all duration-300";
   };
 
-  const handleLogout = (e: React.MouseEvent) => {
+  const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
+    try {
+      await signOut();
+    } catch {
+      // signOut may fail if session already expired, still proceed
+    }
+    queryClient.clear();
     showToast("Anda telah berhasil keluar dari sistem.", "success");
-    setTimeout(() => navigate("/"), 500);
+    navigate("/");
   };
 
   const handleNotImplemented = (feature: string) => {
@@ -80,8 +90,8 @@ export default function Layout() {
           <div className="h-8 w-px bg-white/10 mx-2"></div>
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
-              <p className="text-xs font-semibold text-white">The Midnight Atelier</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-tighter">Akses Admin</p>
+              <p className="text-xs font-semibold text-white">{user?.name || 'The Midnight Atelier'}</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-tighter">{(user as Record<string, unknown>)?.role ? `Akses ${String((user as Record<string, unknown>).role).charAt(0).toUpperCase() + String((user as Record<string, unknown>).role).slice(1)}` : 'Akses Admin'}</p>
             </div>
             <button onClick={() => handleNotImplemented('Profil')} className="focus:outline-none">
               <img className="w-10 h-10 rounded-full border border-primary/20 hover:border-primary transition-colors cursor-pointer" alt="Profil Pengguna" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDcery1EkUqWIxtv7C2AAB1Kk0QADsTbk8nEMB4utLSO-CYaA_Zou5wrzdIwal6tN41XYGnkTjJ90U6hr-cK9HMSMpPkxCXhoXWoH-JX80AHOjblowh3uGLwru6VJMYKU5HyWQVR78PUBGUMqi1jyVnDXFPDsDlwMwrD2Q9xp0DszAv8RBtRgdHI8dPItnsPinGIjvoyyzbN84n8xjKO6sZjdi5Z9npZQQim2hKJ1iKcgyqHN_E8J4xFlYk8bVuq28VIcgbJNUCHGk" />
