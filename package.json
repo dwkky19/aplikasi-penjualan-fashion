@@ -1,0 +1,8 @@
+{
+  "name": "atelier-fashion-management",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}
