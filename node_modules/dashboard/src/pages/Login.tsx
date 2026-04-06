@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../contexts/ToastContext";
-import { signIn } from "../lib/auth-client";
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
 export default function Login() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -17,19 +18,21 @@ export default function Login() {
     setError("");
 
     try {
-      const { data, error: authError } = await signIn.email(
-        { email, password },
-        {
-          onError: (ctx) => {
-            setError(ctx.error.message || "Gagal masuk. Periksa kembali kredensial Anda.");
-            showToast("Gagal masuk. Periksa kembali kredensial Anda.", "error");
-          },
-        }
-      );
-      if (authError) {
-        setError(authError.message || "Gagal masuk. Periksa kembali kredensial Anda.");
-        showToast("Gagal masuk. Periksa kembali kredensial Anda.", "error");
-      } else if (data) {
+      const res = await fetch(`${API_BASE}/api/simple-login`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Gagal masuk. Periksa kembali kredensial Anda.");
+        showToast(data.error || "Gagal masuk.", "error");
+      } else {
+        // Save user info to localStorage for auth guard
+        localStorage.setItem("user", JSON.stringify(data.user));
         showToast("Autentikasi berhasil. Selamat datang di Dasbor.", "success");
         navigate("/dashboard");
       }
@@ -77,15 +80,15 @@ export default function Login() {
 
           <form className="space-y-6" onSubmit={handleLogin}>
             <div className="space-y-1.5">
-              <label className="text-[0.6875rem] uppercase font-semibold tracking-widest text-outline ml-1">Email</label>
+              <label className="text-[0.6875rem] uppercase font-semibold tracking-widest text-outline ml-1">Username</label>
               <div className="relative group">
-                <span className={`material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-lg transition-colors ${error ? 'text-error/70' : 'text-outline group-focus-within:text-primary-container'}`}>mail</span>
+                <span className={`material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-lg transition-colors ${error ? 'text-error/70' : 'text-outline group-focus-within:text-primary-container'}`}>person</span>
                 <input 
                   className={`w-full bg-surface-container-low border hover:border-white/10 rounded-lg py-3.5 pl-12 pr-4 text-on-surface placeholder:text-outline-variant focus:ring-1 transition-all font-body outline-none ${error ? 'border-error/50 focus:ring-error/50' : 'border-transparent focus:border-primary-container/30 focus:ring-secondary-container/50'}`} 
-                  placeholder="admin@atelier.com" 
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin" 
+                  type="text" 
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   required 
                 />
               </div>

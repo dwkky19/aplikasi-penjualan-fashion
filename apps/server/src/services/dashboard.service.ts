@@ -107,7 +107,7 @@ export const dashboardService = {
     const result = await db.execute(sql`
       SELECT 
         TO_CHAR(${transactions.createdAt}, ${dateFormat}) as label,
-        COALESCE(SUM(${transactions.total}::numeric), 0) as value
+        COALESCE(SUM(${transactions.total}::numeric), 0)::float as value
       FROM ${transactions}
       WHERE ${transactions.status} = 'completed'
       GROUP BY DATE_TRUNC(${groupBy}, ${transactions.createdAt}), label
@@ -115,7 +115,8 @@ export const dashboardService = {
       LIMIT 24
     `);
 
-    return result;
+    // db.execute returns rows directly with postgres-js driver
+    return Array.isArray(result) ? result : [];
   },
 
   /**

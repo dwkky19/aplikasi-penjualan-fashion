@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import crypto from "crypto";
 import { toNodeHandler } from "better-auth/node";
 import "dotenv/config";
 
@@ -21,6 +22,18 @@ import { errorHandler } from "./middleware/error.middleware.js";
 const app = express();
 const PORT = parseInt(process.env.PORT || "3001");
 
+// ─── In-memory simple session store ──────────────────────
+const simpleSessions = new Map<string, {
+  id: string;
+  username: string;
+  role: string;
+  name: string;
+  expiresAt: Date;
+}>();
+
+// Export for use in auth middleware
+export { simpleSessions };
+
 // ─── CORS ────────────────────────────────────────────────
 app.use(
   cors({
@@ -38,6 +51,109 @@ app.all("/api/auth/*splat", toNodeHandler(auth));
 // ─── Body parsing (AFTER auth handler) ────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ─── Simple Login Endpoints ──────────────────────────────
+/**
+ * POST /api/simple-login — login with username/password (admin/admin)
+ */
+app.post("/api/simple-login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (username === "admin" && password === "admin") {
+    const sessionToken = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    simpleSessions.set(sessionToken, {
+      id: "admin-user-id",
+      username: "admin",
+      role: "admin",
+      name: "Administrator",
+      expiresAt,
+    });
+
+    // Set session cookie
+    res.cookie("simple_session", sessionToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    });
+
+    res.json({
+      user: {
+        id: "admin-user-id",
+        name: "Administrator",
+        username: "admin",
+        role: "admin",
+      },
+      message: "Login berhasil",
+    });
+  } else {
+    res.status(401).json({ error: "Username atau password salah." });
+  }
+});
+
+/**
+ * GET /api/simple-session — check current simple session
+ */
+app.get("/api/simple-session", (req, res) => {
+  const cookieHeader = req.headers.cookie || "";
+  const cookies = Object.fromEntries(
+    cookieHeader.split(";").map((c) => {
+      const [key, ...val] = c.trim().split("=");
+      return [key, val.join("=")];
+    })
+  );
+
+  const token = cookies["simple_session"];
+  if (!token) {
+    res.status(401).json({ error: "No session" });
+    return;
+  }
+
+  const session = simpleSessions.get(token);
+  if (!session || session.expiresAt < new Date()) {
+    simpleSessions.delete(token);
+    res.status(401).json({ error: "Session expired" });
+    return;
+  }
+
+  res.json({
+    user: {
+      id: session.id,
+      name: session.name,
+      username: session.username,
+      role: session.role,
+    },
+  });
+});
+
+/**
+ * POST /api/simple-logout — destroy simple session
+ */
+app.post("/api/simple-logout", (req, res) => {
+  const cookieHeader = req.headers.cookie || "";
+  const cookies = Object.fromEntries(
+    cookieHeader.split(";").map((c) => {
+      const [key, ...val] = c.trim().split("=");
+      return [key, val.join("=")];
+    })
+  );
+
+  const token = cookies["simple_session"];
+  if (token) {
+    simpleSessions.delete(token);
+  }
+
+  res.cookie("simple_session", "", {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+
+  res.json({ message: "Logout berhasil" });
+});
 
 // ─── Custom auth routes (me endpoint) ─────────────────────
 app.use(authRouter);

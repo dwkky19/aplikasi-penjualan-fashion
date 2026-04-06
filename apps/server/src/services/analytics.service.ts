@@ -16,9 +16,9 @@ export const analyticsService = {
     const result = await db.execute(sql`
       SELECT 
         TO_CHAR(t.created_at, 'Mon') as month,
-        EXTRACT(MONTH FROM t.created_at) as month_num,
+        EXTRACT(MONTH FROM t.created_at)::int as month_num,
         c.name as category,
-        COALESCE(SUM(ti.subtotal::numeric), 0) as revenue
+        COALESCE(SUM(ti.subtotal::numeric), 0)::float as revenue
       FROM ${transactionItems} ti
       INNER JOIN ${transactions} t ON ti.transaction_id = t.id
       INNER JOIN ${productVariants} pv ON ti.variant_id = pv.id
@@ -30,7 +30,7 @@ export const analyticsService = {
       ORDER BY month_num
     `);
 
-    return result;
+    return Array.isArray(result) ? result : [];
   },
 
   /**
@@ -77,7 +77,7 @@ export const analyticsService = {
         SELECT 
           c.id as category_id,
           c.name as category,
-          COALESCE(SUM(ti.subtotal::numeric), 0) as revenue
+          COALESCE(SUM(ti.subtotal::numeric), 0)::float as revenue
         FROM ${categories} c
         LEFT JOIN ${products} p ON p.category_id = c.id
         LEFT JOIN ${productVariants} pv ON pv.product_id = p.id
@@ -90,7 +90,7 @@ export const analyticsService = {
       previous_period AS (
         SELECT 
           c.id as category_id,
-          COALESCE(SUM(ti.subtotal::numeric), 0) as revenue
+          COALESCE(SUM(ti.subtotal::numeric), 0)::float as revenue
         FROM ${categories} c
         LEFT JOIN ${products} p ON p.category_id = c.id
         LEFT JOIN ${productVariants} pv ON pv.product_id = p.id
@@ -103,18 +103,18 @@ export const analyticsService = {
       )
       SELECT 
         cp.category,
-        cp.revenue as current_revenue,
-        COALESCE(pp.revenue, 0) as previous_revenue,
+        cp.revenue::float as current_revenue,
+        COALESCE(pp.revenue, 0)::float as previous_revenue,
         CASE 
           WHEN COALESCE(pp.revenue, 0) = 0 THEN 0
-          ELSE ROUND(((cp.revenue - pp.revenue) / pp.revenue * 100)::numeric, 1)
+          ELSE ROUND(((cp.revenue - pp.revenue) / pp.revenue * 100)::numeric, 1)::float
         END as growth_percentage
       FROM current_period cp
       LEFT JOIN previous_period pp ON cp.category_id = pp.category_id
       ORDER BY cp.revenue DESC
     `);
 
-    return result;
+    return Array.isArray(result) ? result : [];
   },
 
   /**

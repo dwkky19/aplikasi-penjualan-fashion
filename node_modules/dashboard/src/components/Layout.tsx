@@ -1,14 +1,70 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "../contexts/ToastContext";
-import { useSession, signOut } from "../lib/auth-client";
+import { useEffect, useState } from "react";
 import { queryClient } from "../lib/query-client";
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+
+interface SimpleUser {
+  id: string;
+  name: string;
+  username: string;
+  role: string;
+}
 
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { data: session } = useSession();
-  const user = session?.user;
+  const [user, setUser] = useState<SimpleUser | null>(null);
+  const [isPending, setIsPending] = useState(true);
+
+  useEffect(() => {
+    // Check for simple session
+    const checkSession = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/simple-session`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user);
+          localStorage.setItem("user", JSON.stringify(data.user));
+        } else {
+          // Try localStorage as fallback for initial load
+          const stored = localStorage.getItem("user");
+          if (stored) {
+            setUser(JSON.parse(stored));
+          } else {
+            navigate("/", { replace: true });
+            return;
+          }
+        }
+      } catch {
+        const stored = localStorage.getItem("user");
+        if (stored) {
+          setUser(JSON.parse(stored));
+        } else {
+          navigate("/", { replace: true });
+          return;
+        }
+      }
+      setIsPending(false);
+    };
+
+    checkSession();
+  }, [navigate]);
+
+  if (isPending) {
+    return (
+      <div className="min-h-screen bg-surface-container-lowest flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <p className="text-slate-500 text-sm">Memuat sesi...</p>
+        </div>
+      </div>
+    );
+  }
 
   const getNavClass = (path: string) => {
     return location.pathname === path
@@ -19,10 +75,14 @@ export default function Layout() {
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
     try {
-      await signOut();
+      await fetch(`${API_BASE}/api/simple-logout`, {
+        method: "POST",
+        credentials: "include",
+      });
     } catch {
-      // signOut may fail if session already expired, still proceed
+      // Continue even if logout API fails
     }
+    localStorage.removeItem("user");
     queryClient.clear();
     showToast("Anda telah berhasil keluar dari sistem.", "success");
     navigate("/");
@@ -90,8 +150,8 @@ export default function Layout() {
           <div className="h-8 w-px bg-white/10 mx-2"></div>
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
-              <p className="text-xs font-semibold text-white">{user?.name || 'The Midnight Atelier'}</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-tighter">{(user as Record<string, unknown>)?.role ? `Akses ${String((user as Record<string, unknown>).role).charAt(0).toUpperCase() + String((user as Record<string, unknown>).role).slice(1)}` : 'Akses Admin'}</p>
+              <p className="text-xs font-semibold text-white">{user?.name || 'Administrator'}</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-tighter">Akses {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Admin'}</p>
             </div>
             <button onClick={() => handleNotImplemented('Profil')} className="focus:outline-none">
               <img className="w-10 h-10 rounded-full border border-primary/20 hover:border-primary transition-colors cursor-pointer" alt="Profil Pengguna" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDcery1EkUqWIxtv7C2AAB1Kk0QADsTbk8nEMB4utLSO-CYaA_Zou5wrzdIwal6tN41XYGnkTjJ90U6hr-cK9HMSMpPkxCXhoXWoH-JX80AHOjblowh3uGLwru6VJMYKU5HyWQVR78PUBGUMqi1jyVnDXFPDsDlwMwrD2Q9xp0DszAv8RBtRgdHI8dPItnsPinGIjvoyyzbN84n8xjKO6sZjdi5Z9npZQQim2hKJ1iKcgyqHN_E8J4xFlYk8bVuq28VIcgbJNUCHGk" />

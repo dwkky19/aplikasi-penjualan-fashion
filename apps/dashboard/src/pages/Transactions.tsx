@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useToast } from "../contexts/ToastContext";
 import { useTransactions, useTransactionVolume, useProcessReturn } from "../hooks/useTransactions";
-import { transactionService } from "../services/transaction.service";
 
 function formatCurrency(value: string | number) {
   const num = typeof value === "string" ? parseFloat(value) : value;
@@ -56,10 +55,27 @@ export default function Transactions() {
     });
   };
 
-  const handleExport = () => {
-    const url = transactionService.getExportUrl();
-    window.open(url, "_blank");
-    showToast("Mengunduh file CSV...", "success");
+  const handleExport = async () => {
+    try {
+      showToast("Mengunduh file CSV...", "info");
+      const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:3001";
+      const res = await fetch(`${baseUrl}/api/transactions/export`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Gagal mengunduh");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "transactions.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast("File CSV berhasil diunduh.", "success");
+    } catch {
+      showToast("Gagal mengunduh file CSV.", "error");
+    }
   };
 
   return (
